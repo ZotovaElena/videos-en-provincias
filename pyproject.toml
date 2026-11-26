@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vmap"
+version = "0.1.0"
+description = "Most-viewed music video filmed in each Spanish province / island"
+requires-python = ">=3.11"
+# installed via conda in the my_analysis env (no pip dependencies declared)
+dependencies = []
+
+[project.scripts]
+vmap = "vmap.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

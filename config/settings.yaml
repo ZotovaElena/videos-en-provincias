@@ -1,0 +1,11 @@
+http:
+  min_interval_s: 1.0          # per-domain rate limit for real (non-cached) requests
+  timeout_s: 30
+  retries: 4
+  # cache lifetime in days by URL pattern; everything else never expires
+  expire_days:
+    "www.googleapis.com/youtube": 29   # YouTube Developer Policies III.E.4: non-authorized data <= 30 days
+youtube:
+  daily_units_budget: 5000      # of 10,000 default (videos/playlistItems/channels.list: 1 unit each)
+  daily_search_budget: 30       # search.list has its own bucket of 100 calls/day
+pilot_units: ["28", "08", "48", "41", "35-GRA"]

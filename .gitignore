@@ -1,0 +1,12 @@
+.env
+*:Zone.Identifier
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# kept local only
+data/
+docs/
+AGENTS.md
+Plan_000.md
+spain_music_video_locations_coding_agent_instructions.md
