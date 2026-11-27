@@ -235,6 +235,17 @@ def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bo
                               "song_title": meta.at[clip_id, "song_title"], "priority": meta.at[clip_id, "priority"],
                               "searched": True, "note": "video unavailable"})
             continue
+        # seed links were filtered with an older rule set: check them again (hand-given videos are kept)
+        reason = seed.exclusion_reason(r, {**settings, "min_views": 0}) if v["id_method"] == "seed" else ""
+        if reason:
+            not_found.append({"clip_id": clip_id, "artist": meta.at[clip_id, "artist"],
+                              "song_title": meta.at[clip_id, "song_title"], "priority": meta.at[clip_id, "priority"],
+                              "searched": True, "note": f"linked video excluded: {reason}",
+                              "candidate_url": watch_url(r["youtube_id"]), "candidate_title": r["title"],
+                              "candidate_channel": r["channel_title"]})
+            stats["seed"] -= 1
+            stats["not_found"] += 1
+            continue
         rows.append({"clip_id": clip_id, "artist": meta.at[clip_id, "artist"],
                      "song_title": meta.at[clip_id, "song_title"], "youtube_id": r["youtube_id"],
                      "youtube_url": watch_url(r["youtube_id"]), "title": r["title"],

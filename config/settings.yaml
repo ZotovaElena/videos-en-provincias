@@ -16,5 +16,5 @@ youtube:
   duration_s: [60, 600]
   allowed_categories: ["10", "24", "1"]   # Music, Entertainment, Film & Animation
   exclude_title_regex: '(?i)\b(lyrics?|letra|lyric video|audio|official audio|visuali[sz]er|cover|karaoke|reaction|slowed|sped up|teaser|trailer|behind the scenes|making of|detr[aá]s de c[aá]maras|interview|entrevista|ac[uú]stic[oa]?|acoustic|#shorts)\b'
-  exclude_live_regex: '(?i)[\(\[\|/]\s*(live|en vivo|en directo)\b|[-–]\s*(live|en vivo|en directo)\s*$|\b(en vivo|en directo|live at|live from|live in|live on)\b'
+  exclude_live_regex: '(?i)[\(\[\|/]\s*(live|en vivo|en directo)\b|[-–]\s*(live|en vivo|en directo)\s*$|\b(en vivo|en directo|live at|live from|live in|live on|live performance|live session)\b'
 pilot_units: ["28", "08", "48", "41", "35-GRA"]

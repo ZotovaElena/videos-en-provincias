@@ -61,3 +61,7 @@ def test_choose_prefers_artist_channel_then_views():
 def test_slash_live_title_excluded():
     assert ids.check(row(title='SCHILLER: "Kenbo" // Live // with Unheilig', channel_title="Naiara"),
                      "Naiara", "Kenbo", S)[2] == "title_live"
+
+
+def test_live_performance_excluded():
+    assert ids.check(row(title="Naiara - Kenbo (Official Live Performance Video)"), "Naiara", "Kenbo", S)[2] == "title_live"
