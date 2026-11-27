@@ -66,17 +66,18 @@ class YouTube:
         self.budget = budget or Budget()
         self.key = config.secret("YOUTUBE_KEY")
 
-    def call(self, endpoint: str, params: dict):
-        """Returns (json, response). Raises QuotaExceeded before spending over budget."""
+    def call(self, endpoint: str, params: dict, refresh: bool = False):
+        """Returns (json, response). Raises QuotaExceeded before spending over budget.
+        `refresh=True` ignores the cached copy (fresh statistics for one snapshot date)."""
         url = BASE + endpoint
         p = {**params, "key": self.key}
-        r = self.client.cached(url, p)
+        r = None if refresh and not self.client.offline else self.client.cached(url, p)
         if r is None:
             if self.client.offline:
                 r = self.client.get(url, p)        # raises OfflineError
             self.budget.spend("search" if endpoint == "search" else "units")
             try:
-                r = self.client.get(url, p)
+                r = self.client.get(url, p, refresh=refresh)
             except HttpError as e:
                 if e.status == 403 and "quota" in str(e).lower():
                     raise QuotaExceeded(f"YouTube API reports quota exceeded: {e}") from e

@@ -8,4 +8,13 @@ http:
 youtube:
   daily_units_budget: 5000      # of 10,000 default (videos/playlistItems/channels.list: 1 unit each)
   daily_search_budget: 30       # search.list has its own bucket of 100 calls/day
+  quota_timezone: America/Los_Angeles   # quota resets at midnight Pacific Time
+  # official music video filter (top-down seed)
+  min_views: 1000000             # candidates kept in top_videos.csv (no quota cost to change)
+  lookup_min_views: 5000000      # Wikipedia song-article lookup and research list only above this
+  max_channel_videos: 3000      # channels with more uploads are not paged (only explicit video IDs)
+  duration_s: [60, 600]
+  allowed_categories: ["10", "24", "1"]   # Music, Entertainment, Film & Animation
+  exclude_title_regex: '(?i)\b(lyrics?|letra|lyric video|audio|official audio|visuali[sz]er|cover|karaoke|reaction|slowed|sped up|teaser|trailer|behind the scenes|making of|detr[aá]s de c[aá]maras|interview|entrevista|ac[uú]stic[oa]?|acoustic|#shorts)\b'
+  exclude_live_regex: '(?i)[\(\[\|/]\s*(live|en vivo|en directo)\b|[-–]\s*(live|en vivo|en directo)\s*$|\b(en vivo|en directo|live at|live from|live in|live on)\b'
 pilot_units: ["28", "08", "48", "41", "35-GRA"]

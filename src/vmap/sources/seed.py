@@ -277,13 +277,13 @@ def plan_channels(chans: dict, channel_artist: dict, s: dict, min_subs: int, cac
     return out
 
 
-def video_stats(yt: YouTube, video_ids: list[str], log=print) -> list[dict]:
+def video_stats(yt: YouTube, video_ids: list[str], log=print, refresh: bool = False) -> list[dict]:
     rows = []
     ids = list(dict.fromkeys(video_ids))
     for i in range(0, len(ids), 50):
         try:
             d, r = yt.call("videos", {"part": "snippet,statistics,contentDetails,status",
-                                      "id": ",".join(ids[i:i + 50]), "maxResults": 50})
+                                      "id": ",".join(ids[i:i + 50]), "maxResults": 50}, refresh=refresh)
         except QuotaExceeded as e:
             log(f"  STOPPED fetching views at {i}/{len(ids)} videos: {e}")
             break

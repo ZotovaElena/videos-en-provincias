@@ -168,6 +168,19 @@ def resolve() -> None:
         typer.echo(f"{k:22s} {v}")
 
 
+@app.command()
+def youtube(max_queries: int = typer.Option(None, help="Serper queries allowed in this run (default: daily budget)."),
+            search: bool = typer.Option(True, help="Fall back to YouTube search.list (its own daily budget)."),
+            refresh: bool = typer.Option(True, help="Re-download statistics for one snapshot date.")) -> None:
+    """Phase 6: YouTube video + fresh statistics for every clip with a place → youtube_videos.csv."""
+    from vmap.youtube import ids
+
+    res = ids.run(max_queries=max_queries, youtube_search=search, refresh=refresh, log=typer.echo)
+    for k, v in res.items():
+        typer.echo(f"{k:18s} {v}")
+    typer.echo(f"→ {ids.VIDEOS_CSV.relative_to(config.ROOT)}, {ids.NOT_FOUND_CSV.relative_to(config.ROOT)}")
+
+
 @app.command("gold-sample")
 def gold_sample(n: int = typer.Option(60, help="Passages to sample."),
                 force: bool = typer.Option(False, help="Overwrite an existing to-do file.")) -> None:
