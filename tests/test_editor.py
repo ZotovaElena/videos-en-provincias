@@ -121,3 +121,10 @@ def test_video_links(tmp_manual, monkeypatch):
     assert ids.video_links() == {"c1": "dQw4w9WgXcQ"}
     with pytest.raises(ValueError):
         editor.save_video_link("c3", "https://vimeo.com/123")
+
+
+def test_snippet_centred_on_place():
+    text = "x " * 300 + "grabado en Frigiliana y el Desierto de Tabernas." + " y" * 300
+    s = editor.snippet_around(text, ["Desierto de Tabernas"], 40)
+    assert s["hit"] == "Desierto de Tabernas" and s["pre"].startswith("…") and s["post"].endswith("…")
+    assert "Frigiliana" in s["pre"]

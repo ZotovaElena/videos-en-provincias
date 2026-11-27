@@ -115,6 +115,18 @@ def rebuild(plot: bool) -> str:
     return "\n".join(log)
 
 
+def snippet_around(text: str, mentions: list[str], width: int = 220) -> dict:
+    """The part of the passage around the first place mention: {pre, hit, post} (hit = the mention)."""
+    text = str(text or "")
+    for m in mentions:
+        i = text.find(m) if m else -1
+        if i >= 0:
+            a, b = max(0, i - width), min(len(text), i + len(m) + width)
+            return {"pre": ("…" if a else "") + text[a:i], "hit": m,
+                    "post": text[i + len(m):b] + ("…" if b < len(text) else "")}
+    return {"pre": text[:2 * width] + ("…" if len(text) > 2 * width else ""), "hit": "", "post": ""}
+
+
 def page_data() -> dict:
     p = config.PROCESSED
     winners = pd.read_csv(p / "winners.csv", dtype={"unit_id": str})
@@ -128,10 +140,12 @@ def page_data() -> dict:
     rows = []
     for r in pd.concat([pairs, rejected.assign(status="rejected")], ignore_index=True).itertuples(index=False):
         evs = []
+        mentions = [m.strip() for m in str(getattr(r, "location_mention", "") or "").split(";") if m.strip()]
         for e in str(r.evidence_ids).split()[:4]:
             if e in ev.index:
                 x = ev.loc[e]
-                evs.append({"url": x["source_url"], "dom": x["domain"], "txt": str(x["evidence_text"])[:400]})
+                evs.append({"url": x["source_url"], "dom": x["domain"],
+                            **snippet_around(x["evidence_text"], mentions)})
         g = lambda k: (None if pd.isna(getattr(r, k, None)) else getattr(r, k, None))  # noqa: E731
         rows.append({"u": r.unit_id, "c": r.clip_id, "a": g("artist_display") or g("artist"),
                      "s": g("song_display") or g("song_title"), "p": g("location_mention"),
@@ -272,7 +286,8 @@ function renderList(){
     const btn = (act, label) => { const b = el("button",{class: act + (dec && dec.action===act ? " on" : "")}, label);
       b.onclick = () => stage(r, (dec && dec.action===act) ? "" : act, note.value); return b; };
     const why = r.st !== "confirmed" && r.why ? el("div",{class:"why"}, "Dudas: " + r.why.split(" ").join(", ")) : null;
-    const ev = el("div",{class:"ev"}); for (const e of r.ev) ev.append(el("div",{}, link(e.url, e.dom), ": “" + e.txt + "”"));
+    const ev = el("div",{class:"ev"});
+    for (const e of r.ev) ev.append(el("div",{}, link(e.url, e.dom), ": “" + e.pre, e.hit ? el("mark",{}, e.hit) : null, e.post + "”"));
     box.append(el("div",{class:"card" + (u.win===r.c ? " win" : "") + (dirty ? " dirty" : "")},
       el("div",{}, el("span",{class:"song"}, link(r.url, (r.a ? r.a + " – " : "") + (r.s || "?"))), " ", r.m,
          u.win===r.c ? " 🏆" : "", el("span",{class:"muted"}, " · " + fmt(r.v) + " · " + (r.p || ""))),

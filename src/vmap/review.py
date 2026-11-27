@@ -57,14 +57,18 @@ def link(url, text) -> str:
     return f'<a href="{esc(url)}" target="_blank" rel="noopener">{esc(text)}</a>' if isinstance(url, str) else esc(text)
 
 
-def _evidence_html(ids: str, ev_by_id: pd.DataFrame, unit: str, limit: int = 4) -> str:
+def _evidence_html(ids: str, ev_by_id: pd.DataFrame, mentions: str = "", limit: int = 4) -> str:
+    from vmap.editor import snippet_around
+
     out = []
+    names = [m.strip() for m in str(mentions or "").split(";") if m.strip()]
     for eid in str(ids).split()[:limit]:
         if eid not in ev_by_id.index:
             continue
-        rows = ev_by_id.loc[[eid]]
-        r = rows.iloc[0]
-        out.append(f'<div class="ev">{link(r["source_url"], r["domain"])}: “{esc(r["evidence_text"][:300])}…”</div>')
+        r = ev_by_id.loc[[eid]].iloc[0]
+        s = snippet_around(r["evidence_text"], names, 180)
+        out.append(f'<div class="ev">{link(r["source_url"], r["domain"])}: “{esc(s["pre"])}'
+                   f'<mark>{esc(s["hit"])}</mark>{esc(s["post"])}”</div>')
     return "".join(out)
 
 
@@ -114,7 +118,7 @@ def build(winners, pairs, ev_rows, not_found) -> tuple[str, pd.DataFrame]:
                 f"<td>{video}</td><td>{views(r.view_count)}</td>"
                 f"<td class='{cls}'>{esc(r.status)}{esc(' · ' + r.override_note) if r.override_note else ''}"
                 f"<div class='reasons'>{reasons}</div></td>"
-                f"<td>{_evidence_html(r.evidence_ids, ev_by_id, w.unit_id)}</td></tr>")
+                f"<td>{_evidence_html(r.evidence_ids, ev_by_id, r.location_mention)}</td></tr>")
             flat.append({"unit_id": w.unit_id, "unit_name": w.unit_name, "rank": i, "winner": is_win,
                          "status": r.status, "clip_id": r.clip_id, "artist": r.artist, "song_title": r.song_title,
                          "location_mention": r.location_mention, "youtube_url": r.youtube_url,
