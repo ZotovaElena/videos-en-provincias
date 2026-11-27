@@ -1,0 +1,18 @@
+# The 12 island units. Each island is identified by an anchor municipality on it (IGN name, province):
+# the island is the part of the province polygon that contains a point of the anchor municipality's
+# `part`-th largest piece (1 = largest). La Graciosa has no municipality of its own: it is the 2nd largest
+# piece of Teguise (the 1st is on Lanzarote). The build checks each island gets exactly one main part.
+# Islets (Cabrera, Dragonera, Lobos, Alegranza, ...) join the nearest island of their province.
+islands:
+  07-MAL: {name: Mallorca,      province: "07", anchor: Palma}
+  07-MEN: {name: Menorca,       province: "07", anchor: Maó}
+  07-IBI: {name: Eivissa / Ibiza, province: "07", anchor: Eivissa}
+  07-FOR: {name: Formentera,    province: "07", anchor: Formentera}
+  35-GCA: {name: Gran Canaria,  province: "35", anchor: Las Palmas de Gran Canaria}
+  35-LAN: {name: Lanzarote,     province: "35", anchor: Arrecife}
+  35-FUE: {name: Fuerteventura, province: "35", anchor: Puerto del Rosario}
+  35-GRA: {name: La Graciosa,   province: "35", anchor: Teguise, part: 2}
+  38-TFE: {name: Tenerife,      province: "38", anchor: Santa Cruz de Tenerife}
+  38-LPA: {name: La Palma,      province: "38", anchor: Santa Cruz de la Palma}
+  38-GOM: {name: La Gomera,     province: "38", anchor: San Sebastián de la Gomera}
+  38-HIE: {name: El Hierro,     province: "38", anchor: Valverde}

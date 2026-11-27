@@ -29,6 +29,19 @@ def check() -> None:
 
 
 @app.command()
+def units() -> None:
+    """IGN boundaries → 61 units (provinces, Ceuta, Melilla, 12 islands) → data/interim/units.gpkg."""
+    from vmap import units as un
+
+    gdf = un.build()
+    un.write(gdf)
+    typer.echo(f"{len(gdf)} units ({gdf['kind'].value_counts().to_dict()}), "
+               f"all valid: {bool(gdf.is_valid.all())} → {un.UNITS_GPKG.relative_to(config.ROOT)}")
+    isl = gdf[gdf["kind"] == "island"][["unit_id", "name", "area_km2"]]
+    typer.echo(isl.to_string(index=False))
+
+
+@app.command()
 def wikidata(refresh: bool = typer.Option(False, help="Re-download instead of using the cache.")) -> None:
     """Music items with a filming location (P915) in Spain → data/interim/evidence/wikidata.jsonl."""
     from vmap.extract import schema
