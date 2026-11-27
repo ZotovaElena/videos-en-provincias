@@ -20,6 +20,16 @@ PLACES = pd.DataFrame([
     {"ine": "30027", "province": "30", "population": 35000, "name": "Moya", "variants": "Moya"},
     {"ine": "16133", "province": "16", "population": 200, "name": "Moya", "variants": "Moya"},
     {"ine": "35024", "province": "35", "population": 24000, "name": "Teguise", "variants": "Teguise"},
+    {"ine": "25061", "province": "25", "population": 85, "name": "Cabó", "variants": "Cabó"},
+    {"ine": "15023", "province": "15", "population": 7000, "name": "Cee", "variants": "Cee"},
+    {"ine": "24089", "province": "24", "population": 120_000, "name": "León", "variants": "León"},
+    {"ine": "08101", "province": "08", "population": 280_000, "name": "L'Hospitalet de Llobregat",
+     "variants": "L'Hospitalet de Llobregat"},
+    {"ine": "05900", "province": "05", "population": 300, "name": "La Torre", "variants": "La Torre"},
+    {"ine": "16900", "province": "16", "population": 100, "name": "Uña", "variants": "Uña"},
+    {"ine": "12900", "province": "12", "population": 2300, "name": "Vilafranca", "variants": "Vilafranca"},
+    {"ine": "11020", "province": "11", "population": 212_000, "name": "Jerez de la Frontera",
+     "variants": "Jerez de la Frontera"},
 ])
 ADMIN = pd.DataFrame([
     {"kind": "province", "code": "48", "region": "16", "name": "Bizkaia"},
@@ -31,7 +41,7 @@ ADMIN = pd.DataFrame([
 CFG = {
     "province_aliases": {"48": ["Vizcaya"]},
     "islands": {"35-GRA": ["La Graciosa"], "35-LAN": ["Lanzarote"], "38-LPA": ["La Palma"]},
-    "municipality_aliases": {"15078": ["Santiago"]},
+    "municipality_aliases": {"15078": ["Santiago"], "11020": ["Jerez"]},
     "landmarks": ["Bardenas Reales"],
     "foreign_homonyms": ["Valencia", "Medellín", "Santiago", "La Palma"],
     "stop_names": ["Real"],
@@ -172,3 +182,73 @@ def test_excel_round_trip(tmp_path):
     assert back["a"]["gold_places"] == ["Getxo", "Madrid"] and back["a"]["gold_partial"] is True
     assert back["a"]["gold_song"] == "Luz" and back["a"]["gold_artist"] is None
     assert back["b"]["gold_places"] == [] and back["c"]["gold_places"] is None
+
+
+def test_gold_set_regressions(g):
+    assert "Cee" not in places(g, "Fue grabado en el mismo restaurante donde se grabó Cee-Lo Green el video.")
+    assert "León" not in places(g, "Dirigido por Juan Ponce de León, el video fue filmado en Argentina.")
+    assert "León" in places(g, "El videoclip fue grabado en la Catedral de León, España.")
+    assert not places(g, "El videoclip se rodó en las playas del Cabo.")
+    p = places(g, "Lanzó «Lo noto», con un videoclip rodado en Hospitalet de Llobregat.")
+    assert p["Hospitalet de Llobregat"]["candidates"][0]["code"] == "08101"
+    r = rules.extract(ev("El nuevo videoclip, rodado en Jerez de la Frontera, ya está aquí.",
+                         title="Soraya estrena su videoclip rodado en Jerez"), g)
+    assert r.location_mentions == ["Jerez de la Frontera"] and not r.partial
+
+
+def test_evaluate_gold_qualifiers(g):
+    gold = [{"evidence_id": "a", "gold_places": ["Getxo, Bizkaia"], "gold_partial": None}]
+    res = evaluate.evaluate(gold, lambda i: rules.extract(ev("El videoclip se rodó en Getxo, Bizkaia."), g), g)
+    assert res["places"]["tp"] == 1 and res["places"]["fp"] == 0 and not res["errors"]
+
+
+def test_place_noun_before_de_and_video_en(g):
+    assert "Madrid" in places(g, "Desde el centro Lourdes de Madrid, principal escenario de la grabación del videoclip.")
+    assert "Madrid" in places(g, "Lanzó «Lo noto», con un videoclip en Madrid, y superó el millón de visitas.")
+
+
+def test_song_and_headline_artist(g):
+    r = rules.extract(ev("Se han mostrado muy \"orgullosos\". El videoclip de «Lo que queda de mí» se rodó en Getxo."), g)
+    assert r.song_title == "Lo que queda de mí"
+    r = rules.extract(ev("El grupo graba entre el viernes y el sábado en Getxo el videoclip del tema ‘Nunca la primera’."), g)
+    assert r.song_title == "Nunca la primera"
+    assert rules.headline_artist("Naiara graba su nuevo videoclip en Zaragoza") == "Naiara"
+    assert rules.headline_artist("La cantante Soraya estrena su nuevo videoclip") == "Soraya"
+    assert rules.headline_artist("Galería | M Clan rueda su videoclip en Lleida") == "M Clan"
+    assert rules.headline_artist("El videoclip se rodó en Getxo") is None
+
+
+def test_phase5_false_positive_regressions(g):
+    # a place inside a quoted song title or a hashtag is not a filming place
+    assert "Madrid" not in places(g, 'The music video for "Adiós Madrid" was shot in Miami Beach.')
+    # "Spanish director" is not Spanish context; small towns in Wikipedia need it
+    p = places(g, "The video was filmed in Moya. It was directed by Spanish director X.", source_type="wikipedia")
+    assert p["Moya"]["ambiguous"]
+    r = rules.extract(ev("El vídeo se rodó en Teguise, España.", source_type="wikipedia"), g)
+    assert not r.places[0].get("ambiguous")
+    r = rules.extract(ev("El vídeo se rodó en Teguise.", source_type="wikipedia"), g)
+    assert r.places[0]["ambiguous"] == ["small_town_unverified"]
+    r = rules.extract(ev("El vídeo se rodó en Getxo.", source_type="wikipedia"), g)     # > 50k people
+    assert not r.places[0].get("ambiguous")
+    r = rules.extract(ev("El vídeo se rodó en Teguise."), g)                # press: no such requirement
+    assert not r.places[0].get("ambiguous")
+
+
+def test_phase5_second_round(g):
+    assert "la Torre" not in places(g, "El videoclip fue grabado en Madrid, por la Torre del Agua de Besos.")
+    assert "Uña" not in places(g, "Alicante, escenario de la grabación del primer videoclip de Uña y Carne.")
+    assert "Uña" in places(g, "El videoclip se grabó en Uña, un pequeño pueblo.")
+    assert "Vilafranca" not in places(
+        g, "El videoclip se rodó en julio coincidiendo con el tradicional Concurs de Castells de Vilafranca.")
+    assert "Teguise" not in places(g, "El videoclip de su canción 'Teguise de noche' se rodó en Getxo.")
+    # "España" far away (chart positions) does not vouch for a name shared with a foreign city
+    text = ("La canción llegó al top 15 en varios países como Argentina y España, y fue doble platino en "
+            "México y en otros mercados de la región durante meses. Un video musical adjunto, lanzado con "
+            "la canción, fue filmado en Medellín y dirigido por Eric.")
+    p = places(g, text, source_type="wikipedia")
+    assert p["Medellín"]["ambiguous"]
+
+
+def test_group_named_after_town(g):
+    assert "Madrid" not in places(g, "Grabó el videoclip en Getxo con los Castellers de Madrid.")
+    assert "Madrid" in places(g, "Grabó el videoclip en el centro Lourdes de Madrid.")

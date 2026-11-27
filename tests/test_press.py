@@ -22,6 +22,13 @@ def test_html_passages_keeps_only_video_paragraphs():
     assert not any("festival de verano" in p for p in pars)
 
 
+def test_html_passages_reads_bytes_with_declared_encoding():
+    raw = HTML.replace("<head>", "<head><meta charset='iso-8859-1'>").encode("latin-1")
+    pars, _ = press.html_passages(raw, 500)
+    assert any("Getxo" in p and "vídeo" not in p or "Ereaga" in p for p in pars)
+    assert not any("Ã" in p for p in pars)
+
+
 def test_window_cuts_long_paragraph_around_keyword():
     par = "palabra " * 200 + "el videoclip se rodó en Teruel " + "otra " * 200
     out = press._window(par, 120)

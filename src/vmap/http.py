@@ -42,8 +42,27 @@ class HttpError(RuntimeError):
         self.status = status
 
 
+def retrieved_at(resp: requests.Response) -> str:
+    """When the response was originally downloaded (cache creation time), ISO 8601 UTC."""
+    created = getattr(resp, "created_at", None)
+    if created is None:
+        created = datetime.now(timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
 def _redact(params: dict | None) -> dict:
     return {k: ("***" if k.lower() in SECRET_PARAMS else v) for k, v in (params or {}).items()}
+
+
+def _honour_retry_after(r: requests.Response, cap_s: int = 120) -> None:
+    """On 429/503, sleep for the server's Retry-After (seconds), capped, before the retry."""
+    if r.status_code in (429, 503):
+        try:
+            time.sleep(min(int(r.headers.get("Retry-After", "0")), cap_s))
+        except ValueError:
+            pass
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -68,6 +87,7 @@ class Client:
             expire_after=requests_cache.NEVER_EXPIRE,
             urls_expire_after=expire,
             allowable_codes=(200, 404),
+            allowable_methods=("GET", "HEAD", "POST"),
             ignored_parameters=list(SECRET_PARAMS),
             match_headers=False,
             stale_if_error=False,
@@ -82,30 +102,67 @@ class Client:
 
     # ---- public API -------------------------------------------------------
     def get(self, url: str, params: dict | None = None, *, check_robots: bool = False,
-            headers: dict | None = None) -> requests.Response:
+            headers: dict | None = None, refresh: bool = False) -> requests.Response:
+        """GET with cache. `refresh=True` ignores the cached copy and re-downloads it."""
         if check_robots:
             self._check_robots(url)
-        cached = self.session.get(url, params=params, headers=headers, only_if_cached=True,
-                                  timeout=self.timeout)
-        if cached.status_code != 504 and getattr(cached, "from_cache", False):
-            self._log(url, params, cached.status_code, from_cache=True)
+        if refresh and not self.offline:
+            return self._fetch(url, params, headers, force_refresh=True)
+        cached = self.cached(url, params, headers=headers)
+        if cached is not None:
             return cached
         if self.offline:
             raise OfflineError(f"Not in cache (offline mode): {url} {_redact(params)}")
         return self._fetch(url, params, headers)
 
-    def get_json(self, url: str, params: dict | None = None, **kw) -> dict:
-        return self.get(url, params, **kw).json()
+    def cached(self, url: str, params: dict | None = None, headers: dict | None = None):
+        """The cached response, or None if this request is not in the cache (no network)."""
+        r = self.session.get(url, params=params, headers=headers, only_if_cached=True,
+                             timeout=self.timeout)
+        if r.status_code != 504 and getattr(r, "from_cache", False):
+            self._log(url, params, r.status_code, from_cache=True)
+            return r
+        return None
 
-    # ---- internals --------------------------------------------------------
-    def _fetch(self, url, params, headers) -> requests.Response:
+    def post_json(self, url: str, payload: dict, headers: dict | None = None) -> dict:
+        """POST a JSON body (e.g. search APIs). Cached by URL + body; headers (auth) are not in the key."""
+        r = self.session.post(url, json=payload, headers=headers, only_if_cached=True, timeout=self.timeout)
+        if r.status_code != 504 and getattr(r, "from_cache", False):
+            self._log(url, {"body": payload.get("query", "")}, r.status_code, from_cache=True)
+            return r.json()
+        if self.offline:
+            raise OfflineError(f"Not in cache (offline mode): POST {url} {payload.get('query', '')}")
+
         @retry(retry=retry_if_exception(_is_retryable), stop=stop_after_attempt(self.retries),
                wait=wait_exponential(multiplier=2, min=2, max=60), reraise=True)
         def _do():
             self._throttle(urlsplit(url).netloc)
-            r = self.session.get(url, params=params, headers=headers, timeout=self.timeout)
+            r = self.session.post(url, json=payload, headers=headers, timeout=self.timeout)
+            self._log(url, {"body": payload.get("query", "")}, r.status_code, from_cache=False)
+            if r.status_code != 200:
+                _honour_retry_after(r)
+                raise HttpError(r.status_code, url, r.text)
+            return r
+        return _do().json()
+
+    def is_cached_post(self, url: str, payload: dict) -> bool:
+        r = self.session.post(url, json=payload, only_if_cached=True, timeout=self.timeout)
+        return r.status_code != 504 and getattr(r, "from_cache", False)
+
+    def get_json(self, url: str, params: dict | None = None, **kw) -> dict:
+        return self.get(url, params, **kw).json()
+
+    # ---- internals --------------------------------------------------------
+    def _fetch(self, url, params, headers, force_refresh: bool = False) -> requests.Response:
+        @retry(retry=retry_if_exception(_is_retryable), stop=stop_after_attempt(self.retries),
+               wait=wait_exponential(multiplier=2, min=2, max=60), reraise=True)
+        def _do():
+            self._throttle(urlsplit(url).netloc)
+            r = self.session.get(url, params=params, headers=headers, timeout=self.timeout,
+                                 force_refresh=force_refresh)
             self._log(url, params, r.status_code, from_cache=getattr(r, "from_cache", False))
             if r.status_code not in (200, 404):
+                _honour_retry_after(r)
                 raise HttpError(r.status_code, url, r.text)
             return r
         return _do()

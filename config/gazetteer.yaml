@@ -115,10 +115,23 @@ stop_names:
    Mota, Lerma, Haro, Lena, Pals, Ezcaray, Grado, Castillo, Montero, Ponce, Ojén,
    Molina, Leiva, Bosque, Muro, Pego, Mula, Melón, Mahora, Peal, Salar, Oria, Coria, Ager, Gines, Soses]
 
-spain_cues: [España, Spain, Spanish, español, española, españoles, españolas]
+# only the country name: "Spanish director" says nothing about where the video was filmed
+spain_cues: [España, Spain]
 foreign_cues:
   [México, Mexico, Colombia, Chile, Argentina, Venezuela, Perú, Peru, Ecuador, Cuba, Puerto Rico,
    Estados Unidos, EE. UU., EE.UU., EEUU, United States, USA, U.S., Ohio, Texas, California, Florida,
    Nuevo México, New Mexico, Filipinas, Philippines, Nicaragua, Honduras, Guatemala, Bolivia, Paraguay,
    Uruguay, Costa Rica, Panamá, Panama, República Dominicana, Dominican Republic, El Salvador, Jalisco,
-   Yucatán, Bogotá, Lima, Caracas, Buenos Aires, Ciudad de México, Mexico City, Miami]
+   Yucatán, Bogotá, Lima, Caracas, Buenos Aires, Ciudad de México, Mexico City, Miami, Antioquia,
+   Francia, France, Italia, Italy, Portugal, Alemania, Germany, Reino Unido, United Kingdom, Inglaterra,
+   England, Irlanda, Ireland, Escocia, Scotland, Bélgica, Belgium, Países Bajos, Holanda, Netherlands, Suiza,
+   Switzerland, Austria, Polonia, Poland, Rumanía, Rumania, Romania, Grecia, Greece, Suecia, Sweden, Noruega,
+   Norway, Finlandia, Finland, Dinamarca, Denmark, Islandia, Iceland, Rusia, Russia, Ucrania, Ukraine,
+   Turquía, Turkey, Marruecos, Morocco, Egipto, Egypt, Japón, Japan, China, India, Corea, Korea, Tailandia,
+   Thailand, Australia, Canadá, Canada, Brasil, Brazil, Sudáfrica, South Africa, Londres, London, París,
+   Paris, Roma, Rome, Milán, Milan, Berlín, Berlin, Praga, Prague, Viena, Vienna, Ámsterdam, Amsterdam,
+   Lisboa, Lisbon, Oporto, Porto, Nueva York, New York, Los Ángeles, Los Angeles, Hollywood, Las Vegas,
+   Chicago, Tokio, Tokyo, Turín, Turin, Venecia, Venice, Florencia, Florence, Dubái, Dubai, Estambul,
+   Istanbul, Marrakech, Cancún, Tulum, Bariloche, Barranquilla, Cartagena de Indias, Santo Domingo,
+   La Habana, Havana, San Juan de Puerto Rico, Atlanta, Nashville, Hawái, Hawaii, Toronto, Montreal,
+   Vancouver, Medellín, Colombia]

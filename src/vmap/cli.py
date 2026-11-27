@@ -35,6 +35,9 @@ def units() -> None:
 
     gdf = un.build()
     un.write(gdf)
+    muni = un.build_municipalities(gdf)
+    muni.to_csv(un.MUNI_CSV, index=False)
+    typer.echo(f"{len(muni)} municipalities → {un.MUNI_CSV.relative_to(config.ROOT)}")
     typer.echo(f"{len(gdf)} units ({gdf['kind'].value_counts().to_dict()}), "
                f"all valid: {bool(gdf.is_valid.all())} → {un.UNITS_GPKG.relative_to(config.ROOT)}")
     isl = gdf[gdf["kind"] == "island"][["unit_id", "name", "area_km2"]]
@@ -117,12 +120,13 @@ def places() -> None:
 
 @app.command()
 def press(max_queries: int = typer.Option(None, help="Real (non-cached) queries allowed in this run."),
-          dry_run: bool = typer.Option(False, help="Only show the query plan; no API calls.")) -> None:
+          dry_run: bool = typer.Option(False, help="Only show the query plan; no API calls."),
+          cached_only: bool = typer.Option(False, help="Use cached queries only; spend no search quota.")) -> None:
     """Press search 'videoclip rodado en {localidad}' → data/interim/evidence/press.jsonl."""
     from vmap.extract import schema
     from vmap.sources import press as pr
 
-    res = pr.run(max_queries=max_queries, dry_run=dry_run, log=typer.echo)
+    res = pr.run(max_queries=max_queries, dry_run=dry_run, cached_only=cached_only, log=typer.echo)
     if dry_run:
         typer.echo(f"{res['planned']} queries planned; by tier (0 capitals, 1 towns, 2 rest): {res['by_tier']}")
         for q in res["first"]:
@@ -152,6 +156,16 @@ def extract() -> None:
     typer.echo(f"{len(places)} place mentions by kind {dict(kinds)}; ambiguous {dict(amb)}")
     typer.echo(f"partial: {sum(1 for r in out if r.partial)}; with song: {sum(1 for r in out if r.song_title)}; "
                f"with artist: {sum(1 for r in out if r.artist)} → {path.relative_to(config.ROOT)}")
+
+
+@app.command()
+def resolve() -> None:
+    """Phase 5: link records to clips, places to units → clip_locations.csv, clips.csv, review_queue.csv."""
+    from vmap.resolve import pipeline
+
+    res = pipeline.run(log=typer.echo)
+    for k, v in res.items():
+        typer.echo(f"{k:22s} {v}")
 
 
 @app.command("gold-sample")

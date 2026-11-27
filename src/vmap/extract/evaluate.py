@@ -55,6 +55,12 @@ def _key(s: str) -> str:
     return clips.norm(s)
 
 
+def _gold_entry(s: str) -> tuple[str, list[str]]:
+    """'Vigo, Galicia' → ('Vigo', ['Galicia']): the place plus qualifiers (its region or province)."""
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    return (parts[0], parts[1:]) if parts else (s, [])
+
+
 def _same(a: str, b: str) -> bool:
     a, b = _key(a), _key(b)
     return a == b or (len(a) > 3 and a in b) or (len(b) > 3 and b in a)
@@ -88,16 +94,22 @@ def evaluate(gold: list[dict], predict, g: gz.Gazetteer, min_conf: float = 0.5) 
         pred = predict(r["evidence_id"])
         pp = [p for p in (pred.places if pred else []) if (p.get("confidence") or 0) >= min_conf]
         pred_names = [p["mention"] for p in pp]
-        gold_names = r["gold_places"]
-        matched = set()
-        for gname in gold_names:
-            hit = next((i for i, pn in enumerate(pred_names) if i not in matched and _same(gname, pn)), None)
+        entries = [_gold_entry(x) for x in r["gold_places"]]
+        gold_names = [name for name, _ in entries]
+        matched, qualifier_hits = set(), set()
+        row_fn = 0
+        for name, quals in entries:
+            hit = next((i for i, pn in enumerate(pred_names) if i not in matched and _same(name, pn)), None)
             if hit is None:
-                pl["fn"] += 1
+                row_fn += 1
             else:
                 matched.add(hit)
                 pl["tp"] += 1
-        pl["fp"] += len(pred_names) - len(matched)
+            # a predicted mention of the qualifier ("Galicia" in "Vigo, Galicia") is not a false positive
+            qualifier_hits |= {i for i, pn in enumerate(pred_names) if any(_same(q, pn) for q in quals)}
+        row_fp = len(set(range(len(pred_names))) - matched - qualifier_hits)
+        pl["fn"] += row_fn
+        pl["fp"] += row_fp
         gp = _provinces(gold_names, g)
         prp = set()
         for p in pp:          # province level = what could reach the map: one province, not ambiguous
@@ -107,11 +119,14 @@ def evaluate(gold: list[dict], predict, g: gz.Gazetteer, min_conf: float = 0.5) 
         pv["tp"] += len(gp & prp)
         pv["fp"] += len(prp - gp)
         pv["fn"] += len(gp - prp)
-        if set(map(_key, gold_names)) != set(map(_key, pred_names)):
-            errors.append({"evidence_id": r["evidence_id"], "gold": gold_names, "pred": pred_names})
+        if row_fp or row_fn:
+            errors.append({"evidence_id": r["evidence_id"], "gold": r["gold_places"], "pred": pred_names,
+                           "fp": row_fp, "fn": row_fn})
         if r.get("gold_partial") is not None and gold_names:
             n_part += 1
             part += bool(pred and pred.partial) == bool(r["gold_partial"])
+        if pred is None:          # song / artist are judged only where the extractor returned a record
+            continue
         if r.get("gold_song"):
             n_song += 1
             song += bool(pred and pred.song_title and clips.norm_title(pred.song_title)
@@ -123,6 +138,7 @@ def evaluate(gold: list[dict], predict, g: gz.Gazetteer, min_conf: float = 0.5) 
             "partial_accuracy": round(part / n_part, 3) if n_part else None,
             "song_accuracy": round(song / n_song, 3) if n_song else None,
             "artist_accuracy": round(artist / n_artist, 3) if n_artist else None,
+            "song_artist_judged_on": n_song,
             "errors": errors}
 
 
@@ -198,9 +214,11 @@ def from_excel(path: Path = XLSX) -> list[dict]:
             continue
 
         def text(v):
-            return str(v).strip() if v is not None and str(v).strip() else None
+            v = str(v).strip() if v is not None else ""
+            return None if not v or v.lower() in ("none", "null", "-", "n/a") else v
 
-        gp = text(r.get("gold_places"))
+        gp = str(r["gold_places"]).strip() if r.get("gold_places") is not None else None
+        gp = gp or None
         places = None if gp is None else ([] if gp.upper() == NONE_MARK else
                                           [p.strip() for p in gp.split(";") if p.strip()])
         partial = text(r.get("gold_partial"))

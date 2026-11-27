@@ -27,6 +27,12 @@ def settings() -> dict:
         return yaml.safe_load(f) or {}
 
 
+@lru_cache
+def search() -> dict:
+    with open(CONFIG / "search.yaml", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
 def secret(name: str, required: bool = True) -> str | None:
     value = os.environ.get(name, "").strip() or None
     if required and not value:

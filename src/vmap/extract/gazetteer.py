@@ -73,6 +73,12 @@ class Gazetteer:
         # capitalised words of the name (articles excluded) must be capitalised in the text
         self.caps.setdefault(key, tuple(t[0].isupper() and ntok(t) not in ARTICLES for t, _, _ in toks))
         self.maxlen = max(self.maxlen, len(key))
+        # "L'Hospitalet de Llobregat" is often written "Hospitalet de Llobregat": add the form without the
+        # leading article when at least two words remain (not "Santos" for "Los Santos")
+        if len(key) >= 3 and key[0] in ARTICLES and entry.kind == "municipality":
+            rest = name[toks[1][1]:]
+            if rest != name:
+                self.add(rest, entry)
 
     def find(self, text: str) -> list[dict]:
         """Non-overlapping place mentions, longest first: [{mention, start, end, entries, n_tokens}]."""
@@ -91,7 +97,9 @@ class Gazetteer:
                 continue
             n, key = hit
             start, end = toks[i][1], toks[i + n - 1][2]
-            if key not in self.stop:
+            glued = (end < len(text) - 1 and text[end] in "-‐" and text[end + 1].isalpha()) or \
+                    (start > 1 and text[start - 1] in "-‐" and text[start - 2].isalpha())
+            if key not in self.stop and not glued:      # "Cee-Lo" is not Cee
                 out.append({"mention": text[start:end], "start": start, "end": end,
                             "entries": self.index[key], "n_tokens": n})
             i += n
@@ -99,7 +107,8 @@ class Gazetteer:
 
     def _caps_ok(self, key, toks) -> bool:
         need = self.caps[key]
-        if not toks[0][0][0].isupper() and ntok(toks[0][0]) not in ARTICLES:
+        # a lowercase article is only accepted in long names ("el Puerto de Santa María"), not "la Torre"
+        if not toks[0][0][0].isupper() and (ntok(toks[0][0]) not in ARTICLES or len(key) < 3):
             return False
         return all(t[0][0].isupper() for t, c in zip(toks, need) if c)
 

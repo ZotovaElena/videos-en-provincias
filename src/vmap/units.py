@@ -30,6 +30,7 @@ MUNI_SHP = [IGN / "SHP_ETRS89/recintos_municipales_inspire_peninbal_etrs89/"
             IGN / "SHP_WGS84/recintos_municipales_inspire_canarias_wgs84/"
                   "recintos_municipales_inspire_canarias_wgs84.shp"]
 UNITS_GPKG = config.INTERIM / "units.gpkg"
+MUNI_CSV = config.INTERIM / "municipalities.csv"
 METRIC = 3035
 ISLAND_PROVINCES = {"07", "35", "38"}
 NO_PROVINCE = "54"                       # IGN "Territorios no asociados a ninguna provincia"
@@ -123,13 +124,47 @@ def load() -> gpd.GeoDataFrame:
     return gpd.read_file(UNITS_GPKG, layer="units")
 
 
+@lru_cache(maxsize=1)
+def load_metric() -> gpd.GeoDataFrame:
+    return load().to_crs(METRIC)
+
+
+def build_municipalities(units: gpd.GeoDataFrame) -> pd.DataFrame:
+    """INE code → unit, with a point on the municipality's largest piece (for markers and island lookup:
+    Teguise → Lanzarote, Palma → Mallorca)."""
+    muni = _read(MUNI_SHP)
+    muni["ine"] = muni["NATCODE"].str[-5:]
+    muni = muni[~muni["ine"].str.startswith("53")]                  # shared lands, not municipalities
+    parts = _parts(muni[["ine", "NAMEUNIT", "geometry"]])
+    big = parts.sort_values("area_km2", ascending=False).drop_duplicates("ine")
+    pts = gpd.GeoDataFrame(big[["ine", "NAMEUNIT"]], geometry=big.geometry.representative_point(),
+                           crs=METRIC).to_crs(4326)
+    joined = gpd.sjoin(pts, units[["unit_id", "geometry"]], how="left", predicate="within")
+    out = pd.DataFrame({"ine": joined["ine"], "name": joined["NAMEUNIT"], "province": joined["ine"].str[:2],
+                        "unit_id": joined["unit_id"], "lon": joined.geometry.x.round(5),
+                        "lat": joined.geometry.y.round(5)})
+    missing = out[out["unit_id"].isna()]
+    if len(missing):
+        raise ValueError(f"{len(missing)} municipalities outside every unit: {missing['ine'].tolist()[:10]}")
+    return out.sort_values("ine").reset_index(drop=True)
+
+
+@lru_cache(maxsize=1)
+def municipalities() -> pd.DataFrame:
+    if not MUNI_CSV.exists():
+        raise FileNotFoundError(f"{MUNI_CSV} missing: run `vmap units` first.")
+    return pd.read_csv(MUNI_CSV, dtype={"ine": str, "province": str})
+
+
 def locate(lon: float, lat: float, units: gpd.GeoDataFrame | None = None, max_km: float = 1.0) -> dict:
     """Unit of a point and its distance to the unit boundary (m). Points just off the coast (≤ max_km)
     go to the nearest unit; farther points → unit_id None."""
     from shapely.geometry import Point
 
-    units = load() if units is None else units
-    m = units.to_crs(METRIC)
+    if units is None:
+        units, m = load(), load_metric()
+    else:
+        m = units.to_crs(METRIC)
     pt = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(METRIC).iloc[0]
     inside = m.index[m.contains(pt)].tolist()
     if inside:
