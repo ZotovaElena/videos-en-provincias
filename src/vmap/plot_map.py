@@ -28,11 +28,11 @@ TITLE = "El videoclip más visto en YouTube rodado en cada provincia e isla"
 LEGEND = ("† Rodado solo en parte allí o en una comarca compartida  ·  "
           "‡ Una sola fuente, o sin prensa de referencia que lo confirme")
 # initial label offsets (km) for units whose label goes outside, before adjustText tidies them up
-OFFSETS = {"07-MEN": (70, 70), "07-MAL": (60, -95), "07-IBI": (-20, 95), "07-FOR": (95, -60),
-           "51": (70, -75), "52": (90, -45), "48": (-20, 85), "20": (60, 85), "01": (15, 0),
+OFFSETS = {"07-MEN": (70, 70), "07-MAL": (120, -85), "07-IBI": (-20, 95), "07-FOR": (95, -60),
+           "51": (70, -75), "52": (90, -45),
            "38-TFE": (0, 60), "38-LPA": (-10, 70), "38-GOM": (-30, -60), "38-HIE": (0, -55),
            "35-GCA": (0, -60), "35-LAN": (60, 0), "35-FUE": (65, -20), "35-GRA": (40, 45)}
-SMALL_KM2 = 2500
+OUTSIDE = set(OFFSETS)          # only islands, Ceuta and Melilla are labelled outside their unit
 
 
 def unit_colors(units: gpd.GeoDataFrame) -> dict[str, str]:
@@ -48,45 +48,44 @@ def unit_colors(units: gpd.GeoDataFrame) -> dict[str, str]:
     return {u: PALETTE[c] for u, c in col.items()}
 
 
-def _label_text(w) -> tuple[str, str]:
+def label_text(w) -> str:
+    """'Artist – Song' plus marks, wrapped; '' for units without data."""
     if not w.get("has_data"):
-        return "", ""
-    title = textwrap.fill(str(w["song_display"]), 18)
-    artist = textwrap.fill(f"{w['artist_display']}" + (f" {w['mark']}" if isinstance(w["mark"], str) else ""), 22)
-    return title, artist
+        return ""
+    mark = f" {w['mark']}" if isinstance(w.get("mark"), str) and w["mark"] else ""
+    return textwrap.fill(f"{w['artist_display']} – {w['song_display']}{mark}", 20)
+
+
+def label_point(geom):
+    """A point inside the largest part of the unit (never on an islet or in the sea)."""
+    parts = list(getattr(geom, "geoms", [geom]))
+    return max(parts, key=lambda g: g.area).representative_point()
 
 
 def _labels(ax, gdf: gpd.GeoDataFrame, fs: float):
     from adjustText import adjust_text
 
-    texts, tx, ty, meta = [], [], [], []
+    texts, tx, ty, outside = [], [], [], []
     for _, w in gdf.iterrows():
-        pt = w.geometry.representative_point()
+        pt = label_point(w.geometry)
         dx, dy = OFFSETS.get(w["unit_id"], (0, 0))
-        if (dx, dy) == (0, 0) and w["area_km2"] < SMALL_KM2:
-            dx, dy = (0, 45)
-        title, artist = _label_text(w)
-        s = f"{title}\n{artist}" if title else "Sin datos"
-        t = ax.text(pt.x + dx * 1000, pt.y + dy * 1000, s, fontsize=fs, ha="center", va="center",
-                    color="#222" if title else "#777", style="normal" if title else "italic", zorder=5)
+        s = label_text(w)
+        t = ax.text(pt.x + dx * 1000, pt.y + dy * 1000, s or "Sin datos", fontsize=fs if s else fs * 0.9,
+                    ha="center", va="center", weight="bold" if s else "normal", color="#1d1d1d" if s else "#777",
+                    style="normal" if s else "italic", zorder=6, linespacing=1.05)
+        if s and isinstance(w.get("youtube_url"), str):
+            t.set_url(w["youtube_url"])
         texts.append(t)
         tx.append(pt.x)
         ty.append(pt.y)
-        meta.append((title, artist, w.get("youtube_url")))
-    adjust_text(texts, target_x=tx, target_y=ty, ax=ax, expand=(1.08, 1.25), min_arrow_len=8,
-                force_text=(0.15, 0.3), arrowprops=dict(arrowstyle="-", color="#555", lw=0.5), time_lim=20)
-    # replace each placeholder by a bold title over a smaller artist line, same centre
-    for t, (title, artist, url) in zip(texts, meta):
-        if not title:
-            continue
-        x, y = t.get_position()
-        t.set_visible(False)
-        a = ax.annotate(title, (x, y), xytext=(0, 0.5), textcoords="offset points", ha="center", va="bottom",
-                        fontsize=fs, weight="bold", color="#1d1d1d", zorder=6)
-        if isinstance(url, str):
-            a.set_url(url)
-        ax.annotate(artist, (x, y), xytext=(0, -0.5), textcoords="offset points", ha="center", va="top",
-                    fontsize=fs * 0.85, color="#333", zorder=6)
+        outside.append(w["unit_id"] in OUTSIDE)
+    # gentle forces: labels stay near their point (inside the unit); only crowded ones move a little
+    adjust_text(texts, target_x=tx, target_y=ty, ax=ax, expand=(1.03, 1.1), min_arrow_len=12,
+                force_text=(0.05, 0.1), force_pull=(0.05, 0.05), time_lim=20,
+                arrowprops=dict(arrowstyle="-", color="#333", lw=0.7, shrinkA=2, shrinkB=0))
+    for t, x, y, out in zip(texts, tx, ty, outside):
+        if out:                                                  # label outside its unit: dot on the place
+            ax.plot([x], [y], "o", ms=2.2, color="#333", zorder=7)
 
 
 def plot(winners: pd.DataFrame, out_dir=config.PROCESSED) -> dict:
@@ -114,7 +113,7 @@ def plot(winners: pd.DataFrame, out_dir=config.PROCESSED) -> dict:
     ax.set_ylabel("")
     for s in ax.spines.values():
         s.set_visible(False)
-    _labels(ax, main, fs=7.2)
+    _labels(ax, main, fs=6.6)
 
     ins = fig.add_axes((0.012, 0.085, 0.27, 0.19))
     ins.set_facecolor(SEA)
@@ -131,7 +130,7 @@ def plot(winners: pd.DataFrame, out_dir=config.PROCESSED) -> dict:
         s.set_edgecolor("#555")
         s.set_linewidth(0.8)
     ins.text(0.02, 0.97, "Canarias", transform=ins.transAxes, fontsize=8, va="top", style="italic", color="#444")
-    _labels(ins, can, fs=6.6)
+    _labels(ins, can, fs=6.2)
 
     snap = sorted({str(s)[:10] for s in winners["views_snapshot_date"].dropna()})
     date = snap[-1] if snap else "—"

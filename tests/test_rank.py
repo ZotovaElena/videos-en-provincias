@@ -87,3 +87,16 @@ def test_neighbours_never_share_a_colour():
         for b in geoms:
             if a < b and geoms[a].intersects(geoms[b]):
                 assert col[a] != col[b]
+
+
+def test_label_text_and_point():
+    from shapely.geometry import MultiPolygon, box
+
+    from vmap.plot_map import label_point, label_text
+
+    w = {"has_data": True, "artist_display": "Shakira", "song_display": "Chantaje", "mark": "‡"}
+    assert label_text(w) == "Shakira – Chantaje ‡"
+    assert label_text({"has_data": False}) == ""
+    # unit with an islet: the label goes on the big part, not on the islet or between them
+    geom = MultiPolygon([box(0, 0, 10, 10), box(20, 20, 20.5, 20.5)])
+    assert box(0, 0, 10, 10).contains(label_point(geom))

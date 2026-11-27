@@ -17,7 +17,7 @@ import geopandas as gpd
 import pandas as pd
 
 from vmap import config, units as un
-from vmap.plot_map import NEIGHBOURS, unit_colors
+from vmap.plot_map import NEIGHBOURS, label_point, unit_colors
 
 LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist/leaflet"
 
@@ -56,6 +56,8 @@ def build_data() -> dict:
                    "lon": float(f["lon"]), "clips": [{"c": c, "st": s} for c, s in zip(g["clip_id"], g["status"])]})
 
     w = winners.set_index("unit_id")
+    lab = {u: label_point(g) for u, g in zip(units["unit_id"], units.to_crs(un.METRIC).geometry)}
+    lab = gpd.GeoSeries(list(lab.values()), index=list(lab.keys()), crs=un.METRIC).to_crs(4326)
     simple = units.copy()
     simple["geometry"] = simple.geometry.simplify(0.002, preserve_topology=True)
     feats = []
@@ -67,7 +69,8 @@ def build_data() -> dict:
                    "url": _str(wr["youtube_url"]), "v": _num(wr["view_count"]), "c": _str(wr["clip_id"])}
         feats.append({"type": "Feature", "geometry": r.geometry.__geo_interface__,
                       "properties": {"id": r["unit_id"], "name": r["name"], "color": colors[r["unit_id"]],
-                                     "win": win}})
+                                     "win": win, "lab": [round(lab[r["unit_id"]].y, 5),
+                                                         round(lab[r["unit_id"]].x, 5)]}})
     ne = gpd.read_file(config.RAW / "naturalearth" / "ne_10m_admin_0_countries.shp")
     ne = ne[ne["ADM0_A3"].isin(NEIGHBOURS)].clip((-20, 26, 6, 45))
     ne["geometry"] = ne.geometry.simplify(0.01, preserve_topology=True)
@@ -103,11 +106,13 @@ th{font-size:12px;color:var(--muted);font-weight:600} td.v{text-align:right;whit
 a{color:var(--accent)} .song{font-weight:600} .muted{color:var(--muted);font-size:12px}
 .prob td{color:var(--prob);font-style:italic} .badge{display:inline-block;font-size:11px;border:1px dashed var(--prob);color:var(--prob);border-radius:3px;padding:0 3px;font-style:normal}
 .ev a{font-size:11px;margin-right:6px}
-.lbl{background:transparent;border:0;box-shadow:none;font-size:11px;font-weight:600;color:#222;text-align:center;
-text-shadow:0 0 3px #fff,0 0 3px #fff;white-space:normal;width:110px;line-height:1.15;padding:0}
+.lbl{background:transparent;border:0;box-shadow:none;font-size:10.5px;font-weight:600;color:#222;text-align:center;
+text-shadow:0 0 3px #fff,0 0 3px #fff;white-space:normal;width:120px;line-height:1.15;padding:0;cursor:pointer}
 .lbl::before{display:none} .lbl .n{font-size:13px}
 footer{font-size:11px;color:var(--muted);margin-top:16px;border-top:1px solid var(--line);padding-top:8px}
 button{font:inherit;font-size:12px}
+.legend{flex:none;font-size:12px;color:var(--muted);margin:0 0 8px;display:flex;flex-wrap:wrap;gap:2px 14px}
+.legend b,.mk{color:#8a2be2;font-weight:700} .mk{cursor:help;margin-left:3px}
 </style></head><body><div id="app"><div id="map"></div><aside id="side">
 <h1>El videoclip más visto rodado en cada provincia e isla</h1>
 <div class="ctl">
@@ -124,6 +129,10 @@ button{font:inherit;font-size:12px}
   <label><input type="checkbox" class="src" value="wikidata" checked> Wikidata</label>
   <label><input type="checkbox" class="src" value="manual" checked> manual</label></span>
  <button id="can">Canarias</button><button id="pen">Península</button>
+</div>
+<div class="legend">
+ <span><b>†</b> Rodado solo en parte allí o en una zona compartida por varias provincias</span>
+ <span><b>‡</b> Una sola fuente, o ninguna de prensa de referencia que lo confirme</span>
 </div>
 <div id="detail"><p class="muted">Haz clic en una provincia o isla para ver todos sus videoclips, o en un
 punto para ver los de esa localidad.</p></div>
@@ -150,6 +159,9 @@ function passes(c){
   if (c.src.length && !c.src.some(s => state.src.has(s))) return false;
   return true;
 }
+const MARK_TEXT = {"†": "Rodado solo en parte allí o en una zona compartida por varias provincias",
+                   "‡": "Una sola fuente, o ninguna de prensa de referencia que lo confirme"};
+function marks(m){const box=el("span",{});for(const ch of (m||""))box.append(el("span",{class:"mk",title:MARK_TEXT[ch]||null},ch));return box}
 const sortClips = l => l.slice().sort((x,y)=>(y.v??-1)-(x.v??-1));
 
 const map = L.map("map", {zoomSnap:0.25, attributionControl:true});
@@ -158,8 +170,14 @@ map.attributionControl.addAttribution("Límites: IGN-CNIG · Natural Earth · Lu
 L.geoJSON(DATA.neighbours, {style:{color:"#b8ab8f",weight:0.6,fillColor:"#eee6d3",fillOpacity:1}, interactive:false}).addTo(map);
 const unitLayer = L.geoJSON(DATA.units, {style: styleUnit, onEachFeature: (f, layer) => {
   layer.on("click", () => showUnit(f.properties.id));
-  layer.bindTooltip("", {permanent:true, direction:"center", className:"lbl"});
 }}).addTo(map);
+// labels sit on a point inside the largest part of each unit (not on an islet or in the sea)
+const labelLayer = L.layerGroup().addTo(map); const labels = {};
+for (const f of DATA.units.features){
+  const t = L.tooltip({permanent:true, direction:"center", className:"lbl", interactive:true})
+    .setLatLng(f.properties.lab).setContent("");
+  t.on("click", () => showUnit(f.properties.id)); labels[f.properties.id] = t; labelLayer.addLayer(t);
+}
 function styleUnit(f){
   const p = f.properties, sel = state.unit === p.id;
   const has = state.mode === "top" ? !!p.win : (byUnit[p.id]||[]).some(passes);
@@ -170,13 +188,13 @@ function refreshUnits(){
     const p = l.feature.properties; l.setStyle(styleUnit(l.feature));
     let node;
     if (state.mode === "top") {
-      node = p.win ? el("div", {}, p.win.s || "")
+      node = p.win ? el("div", {}, (p.win.a ? p.win.a + " – " : "") + (p.win.s || ""), marks(p.win.m))
                    : el("div", {style:"color:#888;font-weight:400;font-style:italic"}, "Sin datos");
     } else {
       const n = (byUnit[p.id]||[]).filter(passes).length;
       node = el("div", {}, n ? el("span", {class:"n"}, n) : "");
     }
-    l.setTooltipContent(node);
+    labels[p.id].setContent(node);
   });
 }
 
@@ -195,7 +213,7 @@ function refreshPlaces(){
 function placePopup(p, cl){
   const box = el("div", {style:"max-width:280px"}, el("b", {}, p.n || ""), el("div", {class:"muted"}, cl.length + " videoclip(s)"));
   for (const c of sortClips(cl)) box.append(el("div", {style: c.st==="probable"?"color:#9a6a00;font-style:italic":""},
-    a(c.url, c.s || "?"), " — ", c.a || "", " ", c.m, " · ", fmt(c.v), c.st==="probable" ? " (no confirmado)" : ""));
+    a(c.url, (c.a ? c.a + " – " : "") + (c.s || "?")), marks(c.m), " · ", fmt(c.v), c.st==="probable" ? " (no confirmado)" : ""));
   return box;
 }
 
@@ -205,7 +223,7 @@ function showUnit(id){
   const list = sortClips((byUnit[id]||[]).filter(passes));
   const d = $("#detail"); d.replaceChildren(); d.scrollTop = 0;
   d.append(el("h2", {}, f.name));
-  if (f.win) d.append(el("div", {}, "Ganador: ", el("span", {class:"song"}, a(f.win.url, f.win.s)), " — ", f.win.a, " ", f.win.m,
+  if (f.win) d.append(el("div", {}, "Ganador: ", el("span", {class:"song"}, a(f.win.url, (f.win.a ? f.win.a + " – " : "") + (f.win.s || ""))), marks(f.win.m),
                          el("span", {class:"muted"}, " · " + fmt(f.win.v) + " reproducciones")));
   else d.append(el("div", {class:"muted"}, "Sin datos confirmados."));
   if (!list.length){ d.append(el("p", {class:"muted"}, "Ningún videoclip con estos filtros.")); return; }
@@ -214,7 +232,7 @@ function showUnit(id){
     const ev = el("div", {class:"ev"});
     for (const e of c.ev.slice(0, 4)) { const x = DATA.evidence[e]; if (x) ev.append(a(x.url, x.dom, x.txt)); }
     t.append(el("tr", {class: c.st === "probable" ? "prob" : ""},
-      el("td", {}, el("div", {class:"song"}, a(c.url, c.s || "?")), el("div", {}, (c.a || "") + " " + c.m),
+      el("td", {}, el("div", {class:"song"}, a(c.url, (c.a ? c.a + " – " : "") + (c.s || "?")), marks(c.m)),
          c.st === "probable" ? el("span", {class:"badge"}, "no confirmado") : null,
          c.url ? null : el("div", {class:"muted"}, "sin vídeo oficial encontrado")),
       el("td", {}, c.p || ""), el("td", {class:"v"}, fmt(c.v)), el("td", {}, ev)));
@@ -235,7 +253,7 @@ $("#pen").addEventListener("click", () => map.fitBounds([[35.2,-9.5],[43.9,4.4]]
 const foot = $("#foot");
 foot.append("Reproducciones: viewCount de YouTube tal como lo da la API, a " + (DATA.snapshot || "—") +
   " (sin sumas ni medias). Lugar de rodaje: prensa, Wikipedia y Wikidata; solo videoclips con rodaje documentado, ",
-  "por lo que puede faltar alguno. † rodado solo en parte allí o en una zona compartida · ‡ una sola fuente o sin prensa de referencia. ",
+  "por lo que puede faltar alguno. ",
   a("https://www.youtube.com/t/terms", "Condiciones de servicio de YouTube"), ".");
 map.fitBounds([[35.2,-9.5],[43.9,4.4]]); refresh();
 </script></body></html>
