@@ -84,10 +84,17 @@ PAGE = r"""<!doctype html>
 <link rel="stylesheet" href="__LEAFLET__.css">
 <style>
 :root{--sea:#dcebf5;--land:#eee6d3;--ink:#1f1f1f;--muted:#666;--panel:#fff;--line:#e2e2e2;--accent:#2457a6;--prob:#9a6a00}
-*{box-sizing:border-box} html,body{margin:0;height:100%;font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}
-#app{display:flex;height:100%} #map{flex:1;background:var(--sea)}
-#side{width:440px;max-width:100%;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:14px 16px}
-@media (max-width:800px){#app{flex-direction:column}#map{height:55vh;flex:none}#side{width:100%;border-left:0;border-top:1px solid var(--line)}}
+*{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden;font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}
+#app{display:flex;height:100vh;height:100dvh} #map{flex:1;min-width:0;background:var(--sea)}
+/* side panel: title + filters stay put, only the list (#detail) scrolls */
+#side{width:440px;max-width:100%;display:flex;flex-direction:column;min-height:0;background:var(--panel);
+border-left:1px solid var(--line);padding:14px 16px 8px}
+#detail{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-right:4px}
+#side h1,.ctl,footer{flex:none}
+th{position:sticky;top:0;background:var(--panel);z-index:1}
+.leaflet-popup-content{max-height:320px;overflow-y:auto}
+@media (max-width:800px){html,body{overflow:auto}#app{flex-direction:column;height:auto}#map{height:55vh;flex:none}
+#side{width:100%;border-left:0;border-top:1px solid var(--line)}#detail{overflow:visible}}
 h1{font-size:17px;margin:0 0 6px} h2{font-size:16px;margin:14px 0 6px}
 .ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;margin:8px 0;padding:8px;background:#f6f6f6;border-radius:6px}
 .ctl label{white-space:nowrap} select{font:inherit}
@@ -182,7 +189,7 @@ function refreshPlaces(){
     const conf = cl.some(c => c.st === "confirmed");
     const m = L.circleMarker([p.lat, p.lon], {radius: 3 + 2.2*Math.sqrt(cl.length), color: conf ? "#7a2e2e" : "#9a6a00",
       weight: 1, dashArray: conf ? null : "2 2", fillColor: conf ? "#d9534f" : "#f0c36d", fillOpacity: 0.85});
-    m.bindPopup(() => placePopup(p, cl)); m.bindTooltip(p.n || "", {direction:"top"}); m.addTo(placeLayer);
+    m.bindPopup(() => placePopup(p, cl), {maxHeight: 320, autoPanPadding: [20, 20]}); m.bindTooltip(p.n || "", {direction:"top"}); m.addTo(placeLayer);
   }
 }
 function placePopup(p, cl){
@@ -196,7 +203,7 @@ function showUnit(id){
   state.unit = id; refreshUnits();
   const f = DATA.units.features.find(x => x.properties.id === id).properties;
   const list = sortClips((byUnit[id]||[]).filter(passes));
-  const d = $("#detail"); d.replaceChildren();
+  const d = $("#detail"); d.replaceChildren(); d.scrollTop = 0;
   d.append(el("h2", {}, f.name));
   if (f.win) d.append(el("div", {}, "Ganador: ", el("span", {class:"song"}, a(f.win.url, f.win.s)), " — ", f.win.a, " ", f.win.m,
                          el("span", {class:"muted"}, " · " + fmt(f.win.v) + " reproducciones")));
