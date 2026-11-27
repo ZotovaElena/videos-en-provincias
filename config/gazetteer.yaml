@@ -1,0 +1,124 @@
+# Names used by the rule extractor (src/vmap/extract/rules.py) to spot place mentions.
+# Municipality and province names come from the IGN files (data/raw/lineas_limite) and
+# config/place_aliases.yaml; this file only adds what those files do not have.
+# Detection only: nothing here assigns a clip to a place. Resolution and checks happen in Phase 5.
+
+# INE province code → extra names (the IGN name and its "/" variants are always included)
+province_aliases:
+  "01": [Álava, Araba]
+  "03": [Alicante, Alacant]
+  "07": [Baleares, Islas Baleares, Balearic Islands]
+  "12": [Castellón, Castelló]
+  "15": [La Coruña]
+  "17": [Gerona]
+  "20": [Guipúzcoa]
+  "25": [Lérida]
+  "31": [Nafarroa]
+  "32": [Orense]
+  "33": [Principado de Asturias]
+  "41": [Seville]
+  "46": [Valencia, València]
+  "48": [Vizcaya, Biscay]
+
+# Extra names for autonomous communities (IGN community names are always included)
+region_aliases:
+  "01": [Andalusia]
+  "04": [Islas Baleares, Balearic Islands]
+  "05": [Canarias, Islas Canarias, Canary Islands]
+  "07": [Castile and León, Castilla León]
+  "08": [Castilla La Mancha, Castile-La Mancha]
+  "09": [Cataluña, Catalunya, Catalonia]
+  "10": [Comunidad Valenciana, Valencian Community]
+  "15": [Navarre]
+  "16": [País Vasco, Euskadi, Basque Country]
+
+# Islands → unit id
+islands:
+  07-MAL: [Mallorca, Majorca]
+  07-MEN: [Menorca, Minorca]
+  07-IBI: [Ibiza, Eivissa]
+  07-FOR: [Formentera]
+  35-GCA: [Gran Canaria]
+  35-LAN: [Lanzarote]
+  35-FUE: [Fuerteventura]
+  35-GRA: [La Graciosa]
+  38-TFE: [Tenerife]
+  38-LPA: [La Palma]
+  38-GOM: [La Gomera]
+  38-HIE: [El Hierro]
+
+# Extra municipality names in English/other forms (INE code → names)
+municipality_aliases:
+  "41091": [Seville]
+  "50297": [Saragossa]
+  "48020": [Bilbo]
+  "11020": [Jerez]
+
+# Landmarks and natural areas: names only. They are resolved to coordinates and units in Phase 5
+# (Wikidata / Nominatim), never from this file.
+landmarks:
+  - Sagrada Familia
+  - Park Güell
+  - Alhambra
+  - Museo Guggenheim
+  - Guggenheim
+  - Bardenas Reales
+  - Picos de Europa
+  - Doñana
+  - Teide
+  - Timanfaya
+  - Ciudad de las Artes y las Ciencias
+  - Gaztelugatxe
+  - San Juan de Gaztelugatxe
+  - Playa de las Catedrales
+  - Las Médulas
+  - Monfragüe
+  - Cabo de Gata
+  - Sierra de Gredos
+  - Montserrat
+  - Ordesa
+  - Caminito del Rey
+  - Gran Vía
+  - Puerta del Sol
+  - Templo de Debod
+  - Real Alcázar
+  - Torre Agbar
+  - Camp Nou
+  - Medina Azahara
+  - Desierto de Tabernas
+  - Delta del Ebro
+  - Lagos de Covadonga
+  - Covadonga
+  - Albufera
+  - Sierra Nevada
+  - Costa Brava
+  - Costa del Sol
+  - Costa Blanca
+  - Valle del Jerte
+  - Mezquita de Córdoba
+  - Acueducto de Segovia
+  - Sad Hill
+
+# Names that, alone, are also well-known places outside Spain. Matched, but flagged as ambiguous
+# unless the passage also mentions Spain, the place's province/community, or another Spanish place.
+foreign_homonyms:
+  [Santiago, Córdoba, Valencia, Mérida, Toledo, Granada, Guadalajara, León, Cartagena, Trujillo, Medellín,
+   Salamanca, Laredo, Durango, Guernica, Cuenca, Santa Cruz, San Juan, Victoria, La Palma, Santa Marta,
+   San Pedro, Santa Fe, Valladolid, Zamora, Lugo, Palencia, Segovia, Talavera, Aranjuez, Alicante]
+
+# Municipality names that are also ordinary words or common names; never matched alone.
+stop_names:
+  [Real, Mayor, Moral, Mira, Nava, Alba, Sin, Ea, Oña, Ores, Arenas, Gata, Sobre, Toro, Mora,
+   Vega, Rosas, Cabra, Sueca, Teba, Lora, Viso, Polo, Ribera, Vera, Iniesta, Ariza,
+   Siete Iglesias, Olivares, Sorbas, Benavides, Coca, Cuevas, Fuentes, Torres, Navas, Arroyo, Rueda,
+   Paredes, Arjona, Salas, Castro, Villar, Cervera, Pinto, Soto, Prado, Bonete, Manzanares,
+   Mota, Lerma, Haro, Lena, Pals, Ezcaray, Grado, Castillo, Montero, Ponce, Ojén,
+   Molina, Leiva, Bosque, Muro, Pego, Mula, Melón, Mahora, Peal, Salar, Oria, Coria, Ager, Gines, Soses]
+
+spain_cues: [España, Spain, Spanish, español, española, españoles, españolas]
+foreign_cues:
+  [México, Mexico, Colombia, Chile, Argentina, Venezuela, Perú, Peru, Ecuador, Cuba, Puerto Rico,
+   Estados Unidos, EE. UU., EE.UU., EEUU, United States, USA, U.S., Ohio, Texas, California, Florida,
+   Nuevo México, New Mexico, Filipinas, Philippines, Nicaragua, Honduras, Guatemala, Bolivia, Paraguay,
+   Uruguay, Costa Rica, Panamá, Panama, República Dominicana, Dominican Republic, El Salvador, Jalisco,
+   Yucatán, Bogotá, Lima, Caracas, Buenos Aires, Ciudad de México, Mexico City, Miami]
