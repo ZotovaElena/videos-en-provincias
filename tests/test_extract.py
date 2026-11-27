@@ -158,3 +158,17 @@ def test_evaluate_prf(g):
     assert res["n"] == 2
     assert res["places"] == {"precision": 0.5, "recall": 1.0, "f1": 0.667, "tp": 1, "fp": 1, "fn": 0}
     assert res["provinces"]["tp"] == 1 and res["partial_accuracy"] == 1.0
+
+
+def test_excel_round_trip(tmp_path):
+    rows = [{"evidence_id": "a", "source_type": "press", "source_url": "u", "page_title": "t", "text": "x",
+             "gold_places": ["Getxo", "Madrid"], "gold_partial": True, "gold_song": "Luz", "gold_artist": None},
+            {"evidence_id": "b", "source_type": "press", "source_url": "u", "page_title": None, "text": "y",
+             "gold_places": [], "gold_partial": None, "gold_song": None, "gold_artist": None},
+            {"evidence_id": "c", "source_type": "press", "source_url": "u", "page_title": None, "text": "z",
+             "gold_places": None, "gold_partial": None, "gold_song": None, "gold_artist": None}]
+    path = evaluate.to_excel(rows, tmp_path / "g.xlsx")
+    back = {r["evidence_id"]: r for r in evaluate.from_excel(path)}
+    assert back["a"]["gold_places"] == ["Getxo", "Madrid"] and back["a"]["gold_partial"] is True
+    assert back["a"]["gold_song"] == "Luz" and back["a"]["gold_artist"] is None
+    assert back["b"]["gold_places"] == [] and back["c"]["gold_places"] is None

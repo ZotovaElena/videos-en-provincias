@@ -129,3 +129,85 @@ def evaluate(gold: list[dict], predict, g: gz.Gazetteer, min_conf: float = 0.5) 
 def load_gold(path: Path = GOLD) -> list[dict]:
     with open(path, encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+# ---------------------------------------------------------------- Excel round trip for annotation
+XLSX = config.ROOT / "tests" / "gold" / "extraction_gold.xlsx"
+NONE_MARK = "NONE"          # typed in gold_places when the passage names no Spanish filming place
+COLUMNS = ["n", "source_type", "page_title", "text", "gold_places", "gold_partial", "gold_song",
+           "gold_artist", "notes", "source_url", "evidence_id"]
+
+
+def to_excel(rows: list[dict], path: Path = XLSX) -> Path:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "gold"
+    ws.append(COLUMNS)
+    for i, r in enumerate(rows, 1):
+        gp = r.get("gold_places")
+        places = None if gp is None else ("; ".join(gp) if gp else NONE_MARK)
+        partial = None if r.get("gold_partial") is None else ("yes" if r["gold_partial"] else "no")
+        ws.append([i, r["source_type"], r.get("page_title"), r["text"], places, partial, r.get("gold_song"),
+                   r.get("gold_artist"), r.get("notes") or None, r["source_url"], r["evidence_id"]])
+    widths = {"n": 5, "source_type": 11, "page_title": 35, "text": 90, "gold_places": 28, "gold_partial": 12,
+              "gold_song": 24, "gold_artist": 24, "notes": 30, "source_url": 40, "evidence_id": 14}
+    fill = PatternFill("solid", fgColor="FFF2CC")
+    for j, col in enumerate(COLUMNS, 1):
+        letter = ws.cell(1, j).column_letter
+        ws.column_dimensions[letter].width = widths[col]
+        ws.cell(1, j).font = Font(bold=True)
+        for row in ws.iter_rows(min_row=2, min_col=j, max_col=j):
+            row[0].alignment = Alignment(wrap_text=True, vertical="top")
+            if col.startswith("gold_"):
+                row[0].fill = fill
+    dv = DataValidation(type="list", formula1='"yes,no"', allow_blank=True)
+    ws.add_data_validation(dv)
+    dv.add(f"F2:F{len(rows) + 1}")
+    ws.freeze_panes = "E2"
+
+    help_ws = wb.create_sheet("how to annotate")
+    for line in [
+        "Fill the yellow columns of the 'gold' sheet. Leave a row's gold_places empty to skip it.",
+        "gold_places: Spanish places where the music video was filmed, written as in the text or page title, "
+        "separated by ';'. Type NONE if the passage names no Spanish filming place.",
+        "gold_partial: yes if only part of the video was filmed there or several places are named; else no.",
+        "gold_song / gold_artist: as stated in the text or title; leave empty if not stated.",
+        "Then run: vmap gold-import  (writes tests/gold/extraction_gold.jsonl) and vmap eval-extract.",
+    ]:
+        help_ws.append([line])
+    help_ws.column_dimensions["A"].width = 140
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
+    return path
+
+
+def from_excel(path: Path = XLSX) -> list[dict]:
+    from openpyxl import load_workbook
+
+    ws = load_workbook(path, read_only=True)["gold"]
+    it = ws.iter_rows(values_only=True)
+    header = [str(h) for h in next(it)]
+    out = []
+    for vals in it:
+        r = dict(zip(header, vals))
+        if not r.get("evidence_id"):
+            continue
+
+        def text(v):
+            return str(v).strip() if v is not None and str(v).strip() else None
+
+        gp = text(r.get("gold_places"))
+        places = None if gp is None else ([] if gp.upper() == NONE_MARK else
+                                          [p.strip() for p in gp.split(";") if p.strip()])
+        partial = text(r.get("gold_partial"))
+        out.append({"evidence_id": r["evidence_id"], "source_type": r.get("source_type"),
+                    "source_url": r.get("source_url"), "page_title": r.get("page_title"), "text": r.get("text"),
+                    "gold_places": places,
+                    "gold_partial": None if partial is None else partial.lower() in ("yes", "y", "true", "1", "sí", "si"),
+                    "gold_song": text(r.get("gold_song")), "gold_artist": text(r.get("gold_artist")),
+                    "notes": text(r.get("notes")) or ""})
+    return out

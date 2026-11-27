@@ -156,6 +156,30 @@ def gold_sample(n: int = typer.Option(60, help="Passages to sample."),
     typer.echo(f"{len(rows)} passages → {path.relative_to(config.ROOT)}")
 
 
+@app.command("gold-export")
+def gold_export() -> None:
+    """Gold to-do JSONL → tests/gold/extraction_gold.xlsx for annotation in a spreadsheet."""
+    from vmap.extract import evaluate as ev
+
+    src = ev.GOLD if ev.GOLD.exists() else ev.TODO
+    if ev.XLSX.exists():
+        typer.echo(f"{ev.XLSX.relative_to(config.ROOT)} exists (may hold annotations); delete it first to re-export.")
+        raise typer.Exit(1)
+    path = ev.to_excel(ev.load_gold(src))
+    typer.echo(f"{src.relative_to(config.ROOT)} → {path.relative_to(config.ROOT)}")
+
+
+@app.command("gold-import")
+def gold_import() -> None:
+    """Annotated tests/gold/extraction_gold.xlsx → tests/gold/extraction_gold.jsonl."""
+    from vmap.extract import evaluate as ev
+
+    rows = ev.from_excel()
+    path = ev.write_sample(rows, ev.GOLD)
+    done = sum(1 for r in rows if r["gold_places"] is not None)
+    typer.echo(f"{len(rows)} rows, {done} annotated → {path.relative_to(config.ROOT)}")
+
+
 @app.command("eval-extract")
 def eval_extract(min_conf: float = typer.Option(0.5, help="Confidence needed for a place to count."),
                  show_errors: bool = typer.Option(True, help="List passages where places differ.")) -> None:
