@@ -276,8 +276,16 @@ class ArtistIndex:
 
 
 def find_song(text: str, title: str | None, places: list[dict]) -> str | None:
-    """Quoted title next to 'videoclip/canción/tema/song', else a short capitalised quote in a video sentence."""
+    """Quoted title in the sentence that names the place first (an artist page talks about several songs),
+    then next to 'videoclip/canción/tema/song', then a short capitalised quote in a video sentence."""
     names = {p["mention"] for p in places}
+    starts = [p.get("start", -1) for p in places if p.get("field") == "evidence_text"]
+    for sent, off in sentences(text):
+        if any(off <= st < off + len(sent) for st in starts):
+            for q in SONG_QUOTE.findall(sent) + QUOTE.findall(sent):
+                q = q.strip()
+                if q not in names and (q[:1].isupper() or q[:1].isdigit()) and len(q.split()) <= 8:
+                    return q
     for t in (text, title or ""):
         for q in SONG_QUOTE.findall(t):
             if q.strip() not in names:
@@ -385,6 +393,8 @@ def extract(ev: Evidence, g: gz.Gazetteer, artists: ArtistIndex | None = None) -
     song = DISAMBIG.sub("", ev.song_title) if ev.song_title else find_song(ev.evidence_text, title, places)
     artist = ev.artist or (artists.find(title, ev.evidence_text) if artists else None) \
         or headline_artist(title) or headline_artist(ev.evidence_text)
+    if artist:
+        artist = re.sub(r"\s*\([^)]*\)", "", artist).strip() or artist   # "Montesanto (banda)" → "Montesanto"
     for p in places:
         p.pop("_entries", None)
     return ev.model_copy(update={

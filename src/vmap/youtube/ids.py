@@ -150,14 +150,15 @@ def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bo
         found = None
         # 1. Serper (Google) results restricted to youtube.com
         q = f"{artist} {song} site:youtube.com"
-        if stopped is None:
+        searched = True
+        if stopped != "error":
             try:
-                if not serper.is_cached(q):
+                if not serper.is_cached(q):          # cached queries stay free once the budget is used up
                     if budget.remaining() <= 0:
-                        stopped = "serper budget"
+                        stopped, searched = "serper budget", False
                     else:
                         budget.spend()
-                if stopped is None:
+                if searched:
                     ids = ids_from_urls([h["url"] for h in serper.search(q)])[:10]
                     if ids:
                         best, checked = verify(ids, artist, song)
@@ -191,7 +192,7 @@ def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bo
                          for x in sorted(a["candidates"], key=lambda r: -(r.get("view_count") or 0))
                          if x.get("reject_reason") == "not_artist_channel"), None)
             not_found.append({"clip_id": c.clip_id, "artist": artist, "song_title": song, "priority": c.priority,
-                              "searched": stopped is None,
+                              "searched": searched,
                               "candidate_url": watch_url(cand["youtube_id"]) if cand else None,
                               "candidate_title": cand["title"] if cand else None,
                               "candidate_channel": cand["channel_title"] if cand else None})

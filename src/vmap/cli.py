@@ -181,6 +181,42 @@ def youtube(max_queries: int = typer.Option(None, help="Serper queries allowed i
     typer.echo(f"→ {ids.VIDEOS_CSV.relative_to(config.ROOT)}, {ids.NOT_FOUND_CSV.relative_to(config.ROOT)}")
 
 
+@app.command("rank")
+def rank_cmd() -> None:
+    """Phase 7: overrides + winners per unit → winners.csv, candidates/clips by unit and by place."""
+    from vmap import rank as rk
+
+    for k, v in rk.run(log=typer.echo).items():
+        typer.echo(f"{k:20s} {v}")
+
+
+@app.command()
+def review() -> None:
+    """Phase 7: static review page → data/processed/review.html + review.csv."""
+    from vmap import review as rv
+
+    for k, v in rv.run().items():
+        typer.echo(f"{k:8s} {v}")
+
+
+@app.command()
+def plot() -> None:
+    """Phase 7: static map → data/processed/mapa.svg, mapa.png, results.geojson."""
+    from vmap import plot_map
+
+    for k, v in plot_map.run().items():
+        typer.echo(f"{k:12s} {v}")
+
+
+@app.command()
+def explore() -> None:
+    """Phase 7b: interactive explorer (all videos per unit and town) → data/processed/explorer.html."""
+    from vmap import explore as ex
+
+    for k, v in ex.run().items():
+        typer.echo(f"{k:8s} {v}")
+
+
 @app.command("gold-sample")
 def gold_sample(n: int = typer.Option(60, help="Passages to sample."),
                 force: bool = typer.Option(False, help="Overwrite an existing to-do file.")) -> None:

@@ -252,3 +252,10 @@ def test_phase5_second_round(g):
 def test_group_named_after_town(g):
     assert "Madrid" not in places(g, "Grabó el videoclip en Getxo con los Castellers de Madrid.")
     assert "Madrid" in places(g, "Grabó el videoclip en el centro Lourdes de Madrid.")
+
+
+def test_song_from_sentence_with_place(g):
+    text = ("En febrero publicaron el sencillo «Fiesta en el desierto», que fue número uno. "
+            "«Santo es el que vive (Acústica)», grabada en las calles de Getxo, fue su videoclip más visto.")
+    r = rules.extract(ev(text, source_type="wikipedia", artist="Montesanto (banda)"), g)
+    assert r.song_title == "Santo es el que vive (Acústica)" and r.artist == "Montesanto"
