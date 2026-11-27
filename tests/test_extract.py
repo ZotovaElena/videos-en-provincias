@@ -259,3 +259,25 @@ def test_song_from_sentence_with_place(g):
             "«Santo es el que vive (Acústica)», grabada en las calles de Getxo, fue su videoclip más visto.")
     r = rules.extract(ev(text, source_type="wikipedia", artist="Montesanto (banda)"), g)
     assert r.song_title == "Santo es el que vive (Acústica)" and r.artist == "Montesanto"
+
+
+def test_series_and_album_titles_are_not_songs(g):
+    r = rules.extract(ev("Para el videoclip, rodado en Getxo, contó con la actriz conocida por sus papeles "
+                         "en 'Élite' y 'La casa de papel'."), g)
+    assert r.song_title is None
+    r = rules.extract(ev("El grupo lanza su disco «Fuego Amigo» con un videoclip rodado en Getxo."), g)
+    assert r.song_title is None
+    r = rules.extract(ev("El videoclip de «Luz» se rodó en Getxo."), g)
+    assert r.song_title == "Luz"
+
+
+def test_single_from_album_is_a_song(g):
+    r = rules.extract(ev("Presenta el primer sencillo de su nuevo disco, «Todo en mí eras tú», con un videoclip "
+                         "rodado en Getxo."), g)
+    assert r.song_title == "Todo en mí eras tú"
+
+
+def test_songs_listed_from_album():
+    from vmap.extract import rules as r
+    text = 'Han grabado los videoclips de tres de las canciones del álbum: "Little Numbers", "Waitress".'
+    assert r.find_song(text, None, []) == "Little Numbers"

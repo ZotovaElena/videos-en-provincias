@@ -275,6 +275,48 @@ class ArtistIndex:
         return None
 
 
+def manual_places(ev: Evidence, g: gz.Gazetteer) -> Evidence | None:
+    """Hand-added rows: the person named the place, so no trigger or context checks. A location typed
+    exactly as a gazetteer name gets its candidates; anything else is geocoded in Phase 5."""
+    places = []
+    for loc in ev.location_mentions:
+        hits = g.find(loc)
+        full = [h for h in hits if h["start"] == 0 and h["end"] == len(loc)]
+        cands = _candidates(full[0]["entries"]) if full else []
+        places.append({"mention": loc, "field": "location", "candidates": cands, "trigger": "manual",
+                       "prep": True, "sent_video": True, "confidence": 1.0, "ambiguous": None,
+                       **({} if cands else {"unresolved": True})})
+    if not places:
+        return None
+    return ev.model_copy(update={"places": places, "confidence": 1.0})
+
+
+# a quoted title right after these words is a series, film, album or tour, not the song of the video:
+# "conocida por sus papeles en 'Élite'", "lanza su disco «Fuego Amigo»"
+NOT_SONG = re.compile(r"(?i)\b(series?|pel[íi]culas?|films?|movies?|programas?|documental(?:es)?|novelas?|"
+                      r"libros?|papel(?:es)?|roles?|discos?|[áa]lbum(?:es)?|albums?|ep|lp|giras?|tours?|"
+                      r"festival(?:es)?|concursos?|shows?)\b[^.«“\"‘']{0,12}$")
+SONG_WORD = re.compile(r"(?i)\b(sencillos?|singles?|temas?|canci[óo]n|canciones|songs?|tracks?)\b")
+
+
+def _quotes(rx: re.Pattern, text: str) -> list[str]:
+    """Quoted titles not introduced by a series / film / album word ('Élite' y 'La casa de papel': both)."""
+    out, last_rejected_end = [], None
+    for m in rx.finditer(text):
+        if not m.group(1):
+            continue
+        listed = last_rejected_end is not None and \
+            re.fullmatch(r"\s*(?:,|y|e|o|u|and|or)\s*", text[last_rejected_end:m.start()]) is not None
+        before = text[max(0, m.start() - 60):m.start()]
+        nm = NOT_SONG.search(before)
+        # "primer sencillo de su nuevo disco, «X»": a song word just before the album word means X is the song
+        if listed or (nm and not SONG_WORD.search(before[max(0, nm.start(1) - 30):])):
+            last_rejected_end = m.end()
+            continue
+        out.append(m.group(1).strip())
+    return out
+
+
 def find_song(text: str, title: str | None, places: list[dict]) -> str | None:
     """Quoted title in the sentence that names the place first (an artist page talks about several songs),
     then next to 'videoclip/canción/tema/song', then a short capitalised quote in a video sentence."""
@@ -282,17 +324,15 @@ def find_song(text: str, title: str | None, places: list[dict]) -> str | None:
     starts = [p.get("start", -1) for p in places if p.get("field") == "evidence_text"]
     for sent, off in sentences(text):
         if any(off <= st < off + len(sent) for st in starts):
-            for q in SONG_QUOTE.findall(sent) + QUOTE.findall(sent):
-                q = q.strip()
+            for q in _quotes(SONG_QUOTE, sent) + _quotes(QUOTE, sent):
                 if q not in names and (q[:1].isupper() or q[:1].isdigit()) and len(q.split()) <= 8:
                     return q
     for t in (text, title or ""):
-        for q in SONG_QUOTE.findall(t):
-            if q.strip() not in names:
-                return q.strip()
+        for q in _quotes(SONG_QUOTE, t):
+            if q not in names:
+                return q
     for t in [s for s, _ in sentences(text) if VIDEO.search(s)] + [title or ""]:
-        for q in QUOTE.findall(t):
-            q = q.strip()
+        for q in _quotes(QUOTE, t):
             if q not in names and q[:1].isupper() | q[:1].isdigit() and len(q.split()) <= 6 \
                     and not q.endswith((".", ",")):
                 return q
@@ -315,6 +355,8 @@ def _domain(url: str) -> str:
 
 def extract(ev: Evidence, g: gz.Gazetteer, artists: ArtistIndex | None = None) -> Evidence | None:
     """Evidence copy with places, partial, song and artist filled; None when no filming place found."""
+    if ev.source_type == "manual":
+        return manual_places(ev, g)
     if ev.source_type == "wikidata":
         places = [{"mention": m, "field": "wikidata", "candidates": [], "qid": q, "coords": ev.coords,
                    "confidence": 1.0} for m, q in zip(ev.location_mentions, ev.location_qids)]

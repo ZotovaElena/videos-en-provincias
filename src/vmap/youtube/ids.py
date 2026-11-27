@@ -111,7 +111,11 @@ def clips_to_resolve() -> pd.DataFrame:
     """Clips with a non-rejected place, in priority order: confirmed clips in units with no video yet,
     other confirmed clips, then probable ones."""
     locs = pd.read_csv(config.INTERIM / "clip_locations.csv", dtype={"unit_id": str})
-    clips = pd.read_csv(config.INTERIM / "clips.csv", dtype={"main_youtube_id": str})
+    clips = pd.read_csv(config.INTERIM / "clips.csv", dtype={"main_youtube_id": str, "manual_youtube_id": str})
+    if "manual_youtube_id" not in clips:
+        clips["manual_youtube_id"] = None
+    clips["main_youtube_id"] = clips["manual_youtube_id"].where(clips["manual_youtube_id"].notna(),
+                                                                clips["main_youtube_id"])
     locs = locs[locs["status"] != "rejected"].merge(clips[["clip_id", "main_youtube_id"]], on="clip_id")
     covered = set(locs.loc[(locs["status"] == "confirmed") & locs["main_youtube_id"].notna(), "unit_id"])
     pri = locs.assign(p=locs.apply(lambda r: 0 if r["status"] == "confirmed" and r["unit_id"] not in covered
@@ -119,6 +123,17 @@ def clips_to_resolve() -> pd.DataFrame:
     pri = pri.groupby("clip_id")["p"].min()
     out = clips[clips["clip_id"].isin(pri.index)].assign(priority=lambda d: d["clip_id"].map(pri))
     return out.sort_values(["priority", "clip_id"]).reset_index(drop=True)
+
+
+VIDEO_LINKS = config.MANUAL / "video_links.csv"
+
+
+def video_links() -> dict[str, str]:
+    """Hand-given videos (editor: «Vídeo» field): clip_id → YouTube ID. They win over automatic matches."""
+    if not VIDEO_LINKS.exists() or VIDEO_LINKS.stat().st_size == 0:
+        return {}
+    df = pd.read_csv(VIDEO_LINKS, dtype=str).fillna("")
+    return {c: y for c, y in zip(df["clip_id"], df["youtube_id"]) if c and y}
 
 
 def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bool = True, log=print) -> dict:
@@ -130,8 +145,10 @@ def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bo
     budget = press.DailyBudget(min(max_queries if max_queries is not None else pcfg["max_queries_per_day"],
                                    pcfg["max_queries_per_day"]), pcfg.get("max_queries_total"))
     todo = clips_to_resolve()
+    links = video_links()
     chosen: dict[str, dict] = {}
-    not_found, audit, stats = [], [], {"seed": 0, "serper": 0, "search": 0, "not_found": 0, "skipped": 0}
+    not_found, audit, stats = [], [], {"manual": 0, "seed": 0, "serper": 0, "search": 0, "not_found": 0,
+                                         "skipped": 0}
     stopped = None
 
     def verify(ids: list[str], artist: str, song: str):
@@ -139,6 +156,14 @@ def run(max_queries: int | None = None, youtube_search: bool = True, refresh: bo
 
     for c in todo.itertuples(index=False):
         artist, song = c.artist, c.song_title
+        if c.clip_id in links:                                                # editor «Vídeo» field
+            chosen[c.clip_id] = {"youtube_id": links[c.clip_id], "id_method": "manual"}
+            stats["manual"] += 1
+            continue
+        if isinstance(c.manual_youtube_id, str) and c.manual_youtube_id:      # given by the person
+            chosen[c.clip_id] = {"youtube_id": c.manual_youtube_id, "id_method": "manual"}
+            stats["manual"] += 1
+            continue
         if isinstance(c.main_youtube_id, str) and c.main_youtube_id:
             chosen[c.clip_id] = {"youtube_id": c.main_youtube_id, "id_method": "seed",
                                  "candidate_ids": c.youtube_ids}
